@@ -3,17 +3,22 @@
 /// All coordinates are assumed to be integers - behaviour is undefined
 /// if you feed in floats (or anything other) as x and y (or similar) parameters.
 
-/*jshint trailing:true latedef:true */
-/*global document:true */
+/*jshint browser:true devel:true trailing:true latedef:true undef:true unused:true newcap:true */
+
+if (!window.console) {
+	window.console = { log: function(){}, warn: function(){}, error: function(){} }
+}
 
 /// Namespace: ut
 /// Container namespace.
 var ut = ut || {};
 
 /// Constants: Semi-internal constants for ut namespace
+/// VERSION  - Version of the library as string.
 /// NULLCHAR - Character used when none is specified otherwise.
 /// CSSCLASS - The CSS class name used for the tile engine element.
 /// NULLTILE - The tile used as placeholder for empty tile.
+ut.VERSION = "2.1";
 ut.NULLCHAR = " ";
 ut.CSSCLASS = "unicodetiles";
 ut.NULLTILE = {}; // Initialized properly after ut.Tile is defined
@@ -64,57 +69,87 @@ ut.Tile = function(ch, r, g, b, br, bg, bb) {
 	/// Function: resetBackground
 	/// Clears the background color of this tile.
 	ut.Tile.prototype.resetBackground = function() { this.br = this.bg = this.bb = undefined; };
-	/// Function getColorHex
+	/// Function: getColorHex
 	/// Returns the hexadecimal representation of the color
 	ut.Tile.prototype.getColorHex = function() {
 		if (this.r !== undefined && this.g !== undefined && this.b !== undefined)
 			return "#" + this.r.toString(16) + this.g.toString(16) + this.b.toString(16);
 		else return "";
 	};
-	/// Function getBackgroundHex
+	/// Function: getBackgroundHex
 	/// Returns the hexadecimal representation of the background color
 	ut.Tile.prototype.getBackgroundHex = function() {
 		if (this.br !== undefined && this.bg !== undefined && this.bb !== undefined)
 			return "#" + this.br.toString(16) + this.bg.toString(16) + this.bb.toString(16);
 		else return "";
 	};
-	/// Function getColorRGB
+	/// Function: getColorRGB
 	/// Returns the CSS rgb(r,g,b) representation of the color
 	ut.Tile.prototype.getColorRGB = function() {
 		if (this.r !== undefined && this.g !== undefined && this.b !== undefined)
 			return 'rgb('+this.r+','+this.g+','+this.b+')';
 		else return "";
 	};
-	/// Function getBackgroundRGB
+	/// Function: getBackgroundRGB
 	/// Returns the CSS rgb(r,g,b) representation of the background color
 	ut.Tile.prototype.getBackgroundRGB = function() {
 		if (this.br !== undefined && this.bg !== undefined && this.bb !== undefined)
 			return 'rgb('+this.br+','+this.bg+','+this.bb+')';
 		else return "";
 	};
+	/// Function: getColorJSON
+	/// Returns the JSON representation of the color, i.e. object { r, g, b }
+	ut.Tile.prototype.getColorJSON = function() {
+		if (this.r !== undefined && this.g !== undefined && this.b !== undefined)
+			return { "r": this.r, "g": this.g, "b": this.b };
+		else return {};
+	};
+	/// Function: getBackgroundJSON
+	/// Returns the JSON representation of the background color, i.e. object { r, g, b }
+	ut.Tile.prototype.getBackgroundJSON = function() {
+		if (this.r !== undefined && this.g !== undefined && this.b !== undefined)
+			return { "r": this.br, "g": this.bg, "b": this.bb };
+		else return {};
+	};
+	/// Function: copy
+	/// Makes this tile identical to the one supplied. Custom properties are not copied.
+	ut.Tile.prototype.copy = function(other) {
+		this.ch = other.ch;
+		this.r = other.r; this.g = other.g; this.b = other.b;
+		this.br = other.br; this.bg = other.bg; this.bb = other.bb;
+	};
+	/// Function: clone
+	/// Returns a new copy of this tile. Custom properties are not cloned.
+	ut.Tile.prototype.clone = function() {
+		return new ut.Tile(this.ch, this.r, this.g, this.b, this.br, this.bg, this.bb);
+	};
 
 ut.NULLTILE = new ut.Tile();
 
 
 /// Class: Viewport
-/// The tile engine viewport / renderer / window.
+/// The tile engine viewport / window. Takes care of initializing a proper renderer.
 
 /// Constructor: Viewport
 /// Constructs a new Viewport object.
+/// If you wish to display a player character at the center, you should use odd sizes.
 ///
 /// Parameters:
 ///   elem - the DOM element which shall be transformed into the tile engine
 ///   w - (integer) width in tiles
 ///   h - (integer) height in tiles
-ut.Viewport = function(elem, w, h) {
+///   renderer - (optional) choose rendering engine, see <Viewport.setRenderer>, defaults to "auto".
+///   squarify - (optional) set to true to force the tiles square; may break some box drawing
+ut.Viewport = function(elem, w, h, renderer, squarify) {
 	"use strict";
 	this.elem = elem;
 	this.elem.innerHTML = "";
 	this.w = w;
 	this.h = h;
-	this.cx = Math.floor(this.w/2);
-	this.cy = Math.floor(this.h/2);
-	var i, j;
+	this.renderer = null; // setRenderer() is called later
+	this.squarify = squarify;
+	this.cx = Math.floor(w/2);
+	this.cy = Math.floor(h/2);
 
 	// Add CSS class if not added already
 	if (elem.className.indexOf(ut.CSSCLASS) === -1) {
@@ -122,27 +157,72 @@ ut.Viewport = function(elem, w, h) {
 		else elem.className += " " + ut.CSSCLASS;
 	}
 
-	// Create two 2-dimensional arrays to hold the viewport tiles and <span> elements
+	// Create two 2-dimensional array to hold the viewport tiles
 	this.buffer = new Array(h);
-	this.spans = new Array(h);
-	this.colors = new Array(h);
-	for (j = 0; j < h; ++j) {
+	for (var j = 0; j < h; ++j) {
 		this.buffer[j] = new Array(w);
-		this.spans[j] = new Array(w);
-		this.colors[j] = new Array(w);
+		for (var i = 0; i < w; ++i) {
+			this.buffer[j][i] = new ut.Tile();
+		}
 	}
 
-	// Create a matrix of <span> elements, cache references
-	for (j = 0; j < this.h; ++j) {
-		for (i = 0; i < this.w; ++i) {
-			this.spans[j][i] = document.createElement("div");
-			this.elem.appendChild(this.spans[j][i]);
+	/// Function: updateStyle
+	/// If the style of the parent element is modified, this needs to be called.
+	this.updateStyle = function(updateRenderer) {
+		var s = window.getComputedStyle(this.elem, null);
+		this.defaultColor = s.color;
+		this.defaultBackground = s.backgroundColor;
+		if (updateRenderer !== false)
+			this.renderer.updateStyle(s);
+	};
+
+	/// Function: setRenderer
+	/// Switch renderer at runtime. All methods fallback to "dom" if unsuccesful.
+	/// Possible values:
+	///   * "webgl" - Use WebGL with an HTML5 <canvas> element
+	///   * "canvas" - Use HTML5 <canvas> element
+	///   * "dom" - Use regular HTML element manipulation through DOM
+	///   * "auto" - Use best available, i.e. try the above in order, picking the first that works
+	this.setRenderer = function(newrenderer) {
+		this.elem.innerHTML = "";
+		if (newrenderer === "auto" || newrenderer === "webgl") {
+			try {
+				this.renderer = new ut.WebGLRenderer(this);
+			} catch (e) {
+				console.error(e);
+				newrenderer = "canvas";
+				this.elem.innerHTML = "";
+			}
 		}
-		// Line break
-		this.spans[j].push(document.createElement("br"));
-		this.elem.appendChild(this.spans[j][this.w]);
-	}
+		if (newrenderer === "canvas") {
+			try {
+				this.renderer = new ut.CanvasRenderer(this);
+			} catch (e) {
+				console.error(e);
+				newrenderer = "dom";
+				this.elem.innerHTML = "";
+			}
+		}
+		if (newrenderer === "dom") {
+			this.renderer = new ut.DOMRenderer(this);
+		}
+		this.updateStyle(false);
+	};
+
+	this.setRenderer(renderer || "auto");
 };
+
+	/// Function: getRendererString
+	/// Gets the currently used renderer.
+	///
+	/// Returns:
+	///   One of "webgl", "canvas", "dom", "".
+	ut.Viewport.prototype.getRendererString = function() {
+		if (this.renderer instanceof ut.WebGLRenderer) return "webgl";
+		if (this.renderer instanceof ut.CanvasRenderer) return "canvas";
+		if (this.renderer instanceof ut.DOMRenderer) return "dom";
+		return "";
+	};
 
 	/// Function: put
 	/// Puts a tile to the given coordinates.
@@ -188,8 +268,8 @@ ut.Viewport = function(elem, w, h) {
 		var tile;
 		if (x < 0 || y < 0) return;
 		for (var i = 0; i < len; ++i) {
-			if (x >= term.w) { x = 0; ++y;}
-			if (y >= term.h) return;
+			if (x >= this.w) { x = 0; ++y;}
+			if (y >= this.h) return;
 			tile = new ut.Tile(str[i], r, g, b, br, bg, bb);
 			this.unsafePut(tile, x, y);
 			++x;
@@ -217,33 +297,15 @@ ut.Viewport = function(elem, w, h) {
 		for (var j = 0; j < this.h; ++j) {
 			for (var i = 0; i < this.w; ++i) {
 				this.buffer[j][i] = ut.NULLTILE;
-				this.colors[j][i] = "";
 			}
 		}
+		this.renderer.clear();
 	};
 
 	/// Function: render
 	/// Renders the buffer as html to the element specified at construction.
 	ut.Viewport.prototype.render = function() {
-		for (var j = 0; j < this.h; ++j) {
-			for (var i = 0; i < this.w; ++i) {
-				var tile = this.buffer[j][i];
-				var span = this.spans[j][i];
-				// Check and update colors
-				var fg = tile.getColorRGB();
-				var bg = tile.getBackgroundRGB();
-				var colorHash = fg + bg;
-				if (colorHash !== this.colors[j][i]) {
-					this.colors[j][i] = colorHash;
-					span.style.color = fg;
-					span.style.backgroundColor = bg;
-				}
-				// Check and update character
-				var ch = tile.getChar();
-				if (ch !== span.innerHTML)
-					span.innerHTML = ch;
-			}
-		}
+		this.renderer.render();
 	};
 
 
@@ -257,7 +319,7 @@ ut.Viewport = function(elem, w, h) {
 /// but if no width/height is given also negative coords are valid.
 ///
 /// Parameters:
-///   vp - the ut.Viewport instance to use as the viewport
+///   vp - the <Viewport> instance to use as the viewport
 ///   func - the function used for fetching tiles
 ///   w - (integer) (optional) world width in tiles
 ///   h - (integer) (optional) world height in tiles
@@ -269,6 +331,9 @@ ut.Engine = function(vp, func, w, h) {
 	this.h = h;
 	this.refreshCache = true;
 	this.cacheEnabled = false;
+	this.transitionTimer = null;
+	this.transitionDuration = 0;
+	this.transition = null;
 	this.cachex = 0;
 	this.cachey = 0;
 	this.tileCache = new Array(vp.h);
@@ -281,10 +346,56 @@ ut.Engine = function(vp, func, w, h) {
 
 	/// Function: setTileFunc
 	/// Sets the function to be called with coordinates to fetch each tile.
+	/// Optionally can apply a transition effect. Effects are:
+	/// "boxin", "boxout", "circlein", "circleout", "random"
 	///
 	/// Parameters:
 	///   func - function taking parameters (x, y) and returning an ut.Tile
-	ut.Engine.prototype.setTileFunc = function(func) { this.tileFunc = func; };
+	///   effect - (string) (optional) name of effect to use (see above for legal values)
+	///   duration - (integer) (optional) how many milliseconds the transition effect should last
+	ut.Engine.prototype.setTileFunc = function(func, effect, duration) {
+		"use strict";
+		if (effect) {
+			this.transition = undefined;
+			if (typeof effect === "string") {
+				if (effect === "boxin") this.transition = function(x, y, w, h, new_t, old_t, factor) {
+					var halfw = w * 0.5, halfh = h * 0.5;
+					x -= halfw; y -= halfh;
+					if (Math.abs(x) < halfw * factor && Math.abs(y) < halfh * factor) return new_t;
+					else return old_t;
+				};
+				else if (effect === "boxout") this.transition = function(x, y, w, h, new_t, old_t, factor) {
+					var halfw = w * 0.5, halfh = h * 0.5;
+					x -= halfw; y -= halfh;
+					factor = 1.0 - factor;
+					if (Math.abs(x) < halfw * factor && Math.abs(y) < halfh * factor) return old_t;
+					else return new_t;
+				};
+				else if (effect === "circlein") this.transition = function(x, y, w, h, new_t, old_t, factor) {
+					var halfw = w * 0.5, halfh = h * 0.5;
+					x -= halfw; y -= halfh;
+					if (x*x + y*y < (halfw*halfw + halfh*halfh) * factor) return new_t;
+					else return old_t;
+				};
+				else if (effect === "circleout") this.transition = function(x, y, w, h, new_t, old_t, factor) {
+					var halfw = w * 0.5, halfh = h * 0.5;
+					x -= halfw; y -= halfh;
+					factor = 1.0 - factor;
+					if (x*x + y*y > (halfw*halfw + halfh*halfh) * factor) return new_t;
+					else return old_t;
+				};
+				else if (effect === "random") this.transition = function(x, y, w, h, new_t, old_t, factor) {
+					if (Math.random() > factor) return old_t;
+					else return new_t;
+				};
+			}
+			if (this.transition) {
+				this.transitionTimer = (new Date()).getTime();
+				this.transitionDuration = duration || 500;
+			}
+		}
+		this.tileFunc = func;
+	};
 
 	/// Function: setMaskFunc
 	/// Sets the function to be called to fetch mask information according to coordinates.
@@ -296,16 +407,26 @@ ut.Engine = function(vp, func, w, h) {
 
 	/// Function: setShaderFunc
 	/// Sets the function to be called to post-process / shade each visible tile.
-	/// Shader function is called even if caching is enabled (see <setCacheEnabled>).
+	/// Shader function is called even if caching is enabled, see <Engine.setCacheEnabled>.
 	///
 	/// Parameters:
 	///   func - function taking parameters (tile, x, y) and returning an ut.Tile
 	ut.Engine.prototype.setShaderFunc = function(func) { this.shaderFunc = func; };
 
+	/// Function: setWorldSize
+	/// Tiles outside of the range x = [0,width[; y = [0,height[ are not fetched.
+	/// Set to undefined in order to make the world infinite.
+	///
+	/// Parameters:
+	///   width - (integer) new world width
+	///   height - (integer) new world height
+	ut.Engine.prototype.setWorldSize = function(width, height) { this.w = width; this.h = height; };
+
 	/// Function: setCacheEnabled
 	/// Enables or disables the usage of tile cache. This means that
 	/// extra measures are taken to not call the tile function unnecessarily.
-	/// This means that all animating must be done in a shader function (see <setShaderFunc>).
+	/// This means that all animating must be done in a shader function,
+	/// see <Engine.setShaderFunc>.
 	/// Cache is off by default, but should be enabled if the tile function
 	/// does more computation than a simple array look-up.
 	///
@@ -329,12 +450,16 @@ ut.Engine = function(vp, func, w, h) {
 	///   x - (integer) viewport center x coordinate in the tile world
 	///   y - (integer) viewport center y coordinate in the tile world
 	ut.Engine.prototype.update = function(x, y) {
+		"use strict";
 		x = x || 0;
 		y = y || 0;
 		// World coords of upper left corner of the viewport
 		var xx = x - this.viewport.cx;
 		var yy = y - this.viewport.cy;
-		var timeNow = new Date().getTime(); // For passing to shaderFunc
+		var timeNow = (new Date()).getTime(); // For passing to shaderFunc
+		var transTime;
+		if (this.transition) transTime = (timeNow - this.transitionTimer) / this.transitionDuration;
+		if (transTime >= 1.0) this.transition = undefined;
 		var tile;
 		// For each tile in viewport...
 		for (var j = 0; j < this.viewport.h; ++j) {
@@ -349,6 +474,10 @@ ut.Engine = function(vp, func, w, h) {
 				// Check mask
 				} else if (this.maskFunc && !this.maskFunc(ixx, jyy)) {
 					tile = ut.NULLTILE;
+				// Check transition effect
+				} else if (this.transition && !this.refreshCache) {
+					tile = this.transition(i, j, this.viewport.w, this.viewport.h,
+						this.tileFunc(ixx, jyy), this.tileCache[j][i], transTime);
 				// Check cache
 				} else if (this.cacheEnabled && !this.refreshCache) {
 					var lookupx = ixx - this.cachex;
@@ -360,8 +489,8 @@ ut.Engine = function(vp, func, w, h) {
 						tile = this.tileFunc(ixx, jyy);
 				// If all else fails, call tileFunc
 				} else tile = this.tileFunc(ixx, jyy);
-				// Save the tile to cache
-				if (this.cacheEnabled) this.tileCache2[j][i] = tile;
+				// Save the tile to cache (always due to transition effects)
+				this.tileCache2[j][i] = tile;
 				// Apply shader function
 				if (this.shaderFunc && tile !== ut.NULLTILE)
 					tile = this.shaderFunc(tile, ixx, jyy, timeNow);
@@ -369,14 +498,13 @@ ut.Engine = function(vp, func, w, h) {
 				this.viewport.unsafePut(tile, i, j);
 			}
 		}
-		if (this.cacheEnabled) {
-			// Save the new cache origin
-			this.cachex = xx;
-			this.cachey = yy;
-			// Swap cache buffers
-			var tempCache = this.tileCache;
-			this.tileCache = this.tileCache2;
-			this.tileCache2 = tempCache;
-			this.refreshCache = false;
-		}
+		// Cache stuff is enabled always, because it is also required by transitions
+		// Save the new cache origin
+		this.cachex = xx;
+		this.cachey = yy;
+		// Swap cache buffers
+		var tempCache = this.tileCache;
+		this.tileCache = this.tileCache2;
+		this.tileCache2 = tempCache;
+		this.refreshCache = false;
 	};

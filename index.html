@@ -25,15 +25,21 @@
 
 <p>This JavaScript library provides a text character based tile engine for creating <a href="http://en.wikipedia.org/wiki/Roguelike">roguelike</a> games etc. The bundled font (<a href="http://dejavu-fonts.org/">DejaVu Sans Mono</a>) has decent coverage (3289 glyphs) of Unicode, providing monospace characters for <a href="http://tapio.github.com/unicodetiles.js/examples/01-minimal.html">various miscellaneous symbols</a> that can be useful in creating fancy looking character based games and user interfaces. This page itself uses the font.</p>
 
+<p>You might also be interested to know that a third-party <a href="http://kmees.github.com/projects/unicodetiles.html">Ruby port of this library exists</a>.</p>
+
 <h2>Current features</h2>
 
 <ul>
 <li>Viewport - <em>character grid display</em>
 <ul>
+<li>Three rendering engines: WebGL, 2d canvas and slow DOM</li>
+<li>Automatically picks the best renderer supported by user's browser</li>
+<li>Rendering engine can be switched on-the-fly</li>
 <li>Colored characters</li>
 <li>Colored character backgrounds</li>
 <li>Arbitrary character viewport size</li>
 <li>Character size customizable through CSS</li>
+<li>Can make the layout square</li>
 <li>Utilizes CSS3 Web Fonts (@font-face) to provide consistent look across platforms.</li>
 </ul></li>
 <li>Engine - <em>the tile engine</em>
@@ -48,7 +54,7 @@
 <ul>
 <li>Simple addon that makes keyboard managing easier</li>
 </ul></li>
-<li>Meta - <em>General meta stuff</em>
+<li>Meta - <em>general stuff</em>
 <ul>
 <li>Comprehensive API documentation
 <ul>
@@ -56,13 +62,13 @@
 </ul></li>
 <li>Broad browser support
 <ul>
-<li>Tested with Firefox 10, Chromium 16, Google Chrome 18b, Opera 11.61 + 12.0a</li>
-<li>IE9+ is not yet thoroughly tested, but will be supported</li>
+<li>Best on latest Chrome and Firefox</li>
+<li>IE9+ and Opera 11.61+ supported, but less frequently tested</li>
 <li>IE8 and below are not targeted</li>
 </ul></li>
 <li>Static analysis frequently performed
 <ul>
-<li><a href="http://www.jshint.com/">JSHint</a></li>
+<li><a href="http://www.jshint.com/">JSHint</a> (on every git commit)</li>
 <li><a href="http://closure-compiler.appspot.com/">Google Closure Compiler</a></li>
 </ul></li>
 <li>Several examples / tutorials
@@ -70,16 +76,52 @@
 <li>See examples/ subfolder</li>
 </ul></li>
 <li>Minification toolchain through <a href="http://closure-compiler.appspot.com/">Google Closure Compiler</a></li>
+<li>Boilerplate native app for removing browser dependency
+<ul>
+<li>Based on QtWebkit (so requires Qt)</li>
+<li>Just compile the tiny app and drop it next to your games files - no browser needed anymore</li>
+</ul></li>
 </ul></li>
 </ul>
 
 <h2>Documentation</h2>
 
-<p>See <a href="docs/html/">docs/html</a>.</p>
+<p>See docs/html-subdirectory: <a href="docs/html/">local link</a> | <a href="http://tapio.github.com/unicodetiles.js/docs/html/">online</a></p>
 
 <h2>Examples</h2>
 
-<p>See <a href="examples/">examples-subdirectory</a>.</p>
+<p>See examples-subdirectory: <a href="examples/">local link</a> | <a href="http://tapio.github.com/unicodetiles.js/examples/">online</a></p>
+
+<h2>Tests</h2>
+
+<p>There are some, mostly performance related tests/benchmarks that you can run in the tests-subdirectory:
+<a href="tests/">local link</a> | <a href="http://tapio.github.com/unicodetiles.js/tests/">online</a></p>
+
+<h2>Version history</h2>
+
+<ul>
+<li>v2.1
+<ul>
+<li>Improved chracter texture generation for WebGLRenderer</li>
+<li>Small Viewport and Tile improvements</li>
+<li>New example: 08-raycaster</li>
+</ul></li>
+<li>v2.0
+<ul>
+<li>WebGLRenderer</li>
+<li>Renderers in their own files</li>
+<li>More test cases</li>
+</ul></li>
+<li>v1.1
+<ul>
+<li>Transition effects</li>
+<li>Native app based on QtWebkit</li>
+</ul></li>
+<li>v1.0
+<ul>
+<li>Initial release</li>
+</ul></li>
+</ul>
 
 <h2>License</h2>
 
